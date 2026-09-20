@@ -25,7 +25,7 @@ async function refresh() {
     state.ago < 0 ? "last check" : `last check · ${state.ago}s ago`;
   const mine = chrome.runtime.getManifest().version;
   document.getElementById("ver").textContent = `v${mine}`;
-  if (state.code && state.code !== mine) {
+  if (!state.code || state.code !== mine) {
     document.getElementById("status").textContent = "Reload needed";
     document.getElementById("led").className = "led error";
   }
