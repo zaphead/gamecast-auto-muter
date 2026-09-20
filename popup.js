@@ -18,6 +18,7 @@ async function refresh() {
     error: "error"
   };
   statusEl.textContent = state.enabled ? labels[state.status] || state.status : "off";
+  document.getElementById("err").textContent = state.status === "error" && state.error ? state.error : "";
   toggleEl.textContent = state.enabled ? "Turn OFF for this tab" : "Turn ON for this tab";
   toggleEl.onclick = async () => {
     await chrome.runtime.sendMessage({ type: "toggle", tabId: tab.id, on: !state.enabled });

@@ -2,9 +2,9 @@ const POLL_NOTE = "polling lives in offscreen.js";
 const RESIZE_WIDTH = 300;
 const MODEL = "gpt-5-nano";
 
-const SYSTEM_PROMPT = 'Binary classifier. Output ONLY {"is_game": true/false}. No other text.';
+const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text.';
 const USER_PROMPT =
-  '{"is_game": true} = actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
+  'Return JSON. {"is_game": true} = actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
   '{"is_game": false} = full-screen ad, commercial, promo, menu, loading, no game. Unsure = false.';
 
 async function ensureOffscreen() {
@@ -57,7 +57,8 @@ async function classify(dataUrl, apiKey) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_completion_tokens: 20,
+      reasoning_effort: "minimal",
+      max_completion_tokens: 300,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -71,9 +72,16 @@ async function classify(dataUrl, apiKey) {
       ]
     })
   });
-  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json()).error?.message || "";
+    } catch {}
+    throw new Error(`OpenAI ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content || "";
+  if (!content.trim()) throw new Error("Empty response from model");
   try {
     return JSON.parse(content).is_game === true;
   } catch {
@@ -114,6 +122,7 @@ async function checkTab(tabId) {
     [`st_${tabId}`]: isGame ? "game" : "ad",
     [`ts_${tabId}`]: Date.now()
   });
+  await chrome.storage.session.remove([`err_${tabId}`]);
   await chrome.tabs.update(tabId, { muted: !isGame });
   await updateBadge(tabId, true);
 }
@@ -124,7 +133,7 @@ async function tick() {
     try {
       await checkTab(Number(id));
     } catch (e) {
-      await chrome.storage.session.set({ [`st_${id}`]: "error" });
+      await chrome.storage.session.set({ [`st_${id}`]: "error", [`err_${id}`]: String((e && e.message) || e) });
       await updateBadge(Number(id), true);
     }
   }
@@ -141,18 +150,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         try {
           await chrome.tabs.update(msg.tabId, { muted: false });
         } catch {}
-        await chrome.storage.session.remove([`st_${msg.tabId}`, `ts_${msg.tabId}`]);
+        await chrome.storage.session.remove([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`]);
       }
       sendResponse({ ok: true });
     } else if (msg.type === "getState") {
       const tabs = await getEnabledTabs();
       const { openaiKey } = await chrome.storage.local.get("openaiKey");
-      const st = await chrome.storage.session.get([`st_${msg.tabId}`, `ts_${msg.tabId}`]);
+      const st = await chrome.storage.session.get([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`]);
       sendResponse({
         enabled: !!tabs[String(msg.tabId)],
         hasKey: !!openaiKey,
         status: st[`st_${msg.tabId}`] || "off",
-        ts: st[`ts_${msg.tabId}`] || 0
+        ts: st[`ts_${msg.tabId}`] || 0,
+        error: st[`err_${msg.tabId}`] || ""
       });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });
