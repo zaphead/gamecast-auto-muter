@@ -5,6 +5,8 @@
      the word "JSON" in there or json_object mode 400s.
    - MAX_TOKENS: ceiling for the answer. Too low starves the reply
      (empty responses); 300 is plenty for true/false.
+   - TEMPERATURE: 0 = deterministic. If the model ever 400s on
+     temperature, delete that line from the request below.
    - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
    HOW IT DECIDES: every 5s the tab is screenshotted and judged.
@@ -18,17 +20,17 @@ const AI = {
   PRICE_IN_PER_M: 0.05,
   PRICE_OUT_PER_M: 0.4,
   MAX_TOKENS: 300,
-  IMG_DETAIL: "low"
+  IMG_DETAIL: "low",
+  TEMPERATURE: 0
 };
 const DEFAULT_WIDTH = 512;
 const CODE_VERSION = "0.6.1";
 
-const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
+const SYSTEM_PROMPT = 'Binary classifier. Output ONLY {"is_game": true/false}. No other text.';
 const USER_PROMPT =
-  'Return JSON. Judge ONLY what is inside the video player (ignore browser chrome and surrounding page). ' +
-  '{"is_game": true} = player shows an actual sportscast' +
-  '{"is_game": false} = player shows ad or commercial.' +
-  'Unsure = false.';
+  '{"is_game": true} = actual sportscast visible: live play, field/court/rink, players/refs/ball, score bug, sideline, halftime desk talking ball. ' +
+  '{"is_game": false} = full-screen ad, commercial, promo, black screen, menu, loading spinner, no game. ' +
+  'Unsure? Return false.';
 
 const LABELS = {
   off: "Off",
@@ -138,8 +140,21 @@ async function classify(dataUrl, apiKey) {
     },
     body: JSON.stringify({
       model: AI.MODEL,
+      temperature: AI.TEMPERATURE,
       max_completion_tokens: AI.MAX_TOKENS,
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "verdict",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: { is_game: { type: "boolean" } },
+            required: ["is_game"],
+            additionalProperties: false
+          }
+        }
+      },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
