@@ -1,8 +1,8 @@
 /* ================================================================
    AI SETTINGS — toggle the model, prompt, and params HERE.
    - MODEL: any vision chat-model id (e.g. "gpt-5-nano").
-   - SYSTEM_PROMPT / USER_PROMPT: the classifier prompt. NOTE: keep
-     the word "JSON" in there or json_object mode 400s.
+   - SYSTEM_PROMPT / USER_PROMPT: the classifier prompt. Plain
+     true/false text out, no JSON anywhere.
    - MAX_TOKENS: ceiling for the answer. Too low starves the reply
      (empty responses); 300 is plenty for true/false.
    - TEMPERATURE: 0 = deterministic. If the model ever 400s on
@@ -26,11 +26,12 @@ const AI = {
 const DEFAULT_WIDTH = 512;
 const CODE_VERSION = "0.6.1";
 
-const SYSTEM_PROMPT = 'Binary classifier. Output ONLY {"is_game": true/false}. No other text.';
+const SYSTEM_PROMPT = 'Binary sports-vs-ad classifier. Output ONLY the word true or false. No other text, no punctuation, no JSON.';
 const USER_PROMPT =
-  '{"is_game": true} = actual sportscast visible: live play, field/court/rink, players/refs/ball, score bug, sideline, halftime desk talking ball. ' +
-  '{"is_game": false} = full-screen ad, commercial, promo, black screen, menu, loading spinner, no game. ' +
-  'Unsure? Return false.';
+  'Look at the image. Reply true or false, nothing else. ' +
+  'true = actual sportscast visible: live play, field/court/rink, players/refs/ball, score bug, sideline, halftime desk talking ball. ' +
+  'false = full-screen ad, commercial, promo, black screen, menu, loading spinner, no game. ' +
+  'Unsure? Reply false.';
 
 const LABELS = {
   off: "Off",
@@ -142,19 +143,6 @@ async function classify(dataUrl, apiKey) {
       model: AI.MODEL,
       temperature: AI.TEMPERATURE,
       max_completion_tokens: AI.MAX_TOKENS,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "verdict",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: { is_game: { type: "boolean" } },
-            required: ["is_game"],
-            additionalProperties: false
-          }
-        }
-      },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -181,10 +169,12 @@ async function classify(dataUrl, apiKey) {
   const rawCost = ((u.prompt_tokens || 0) * AI.PRICE_IN_PER_M + (u.completion_tokens || 0) * AI.PRICE_OUT_PER_M) / 1e6;
   const cost = Number.isFinite(rawCost) ? rawCost : 0;
   let isGame;
-  try {
-    isGame = JSON.parse(content).is_game === true;
-  } catch {
-    isGame = /"is_game"\s*:\s*true/.test(content);
+  const word = content.trim().toLowerCase().match(/^(true|false)\b/);
+  if (word) {
+    isGame = word[1] === "true";
+  } else {
+    const any = content.toLowerCase().match(/\b(true|false)\b/);
+    isGame = any ? any[1] === "true" : false;
   }
   return { isGame, cost };
 }
