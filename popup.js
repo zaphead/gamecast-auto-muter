@@ -29,7 +29,7 @@ async function refreshInner() {
   errEl.classList.toggle("show", !!hasErr);
   const toggle = document.getElementById("toggle");
   if (document.activeElement !== toggle) toggle.checked = !!state.enabled;
-  document.getElementById("powerlabel").textContent = state.enabled ? "On — this tab" : "Off";
+  document.getElementById("powerlabel").textContent = state.enabled ? tab.title || "On" : "Off";
   document.getElementById("cost").textContent =
     state.lastCost === null || state.lastCost === undefined
       ? "—"
