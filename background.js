@@ -1,30 +1,25 @@
 /* ================================================================
    AI SETTINGS — toggle the model, prompt, and params HERE.
-   - MODEL: any vision chat-model id (e.g. "gpt-5.6-luna").
+   - MODEL: any vision chat-model id (e.g. "gpt-5-nano").
    - SYSTEM_PROMPT / USER_PROMPT: the classifier prompt. NOTE: keep
      the word "JSON" in there or json_object mode 400s.
-   - REASONING_EFFORT: "none" | "low" | "medium" | "high". Higher =
-     smarter verdicts but pricier + slower. "low" is the sweet spot.
-   - MAX_TOKENS: ceiling for reasoning + answer. Too low starves
-     the answer (empty replies); 300 is plenty for true/false.
+   - MAX_TOKENS: ceiling for the answer. Too low starves the reply
+     (empty responses); 300 is plenty for true/false.
    - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
-   - MUTE_AFTER_ADS / UNMUTE_AFTER_GAMES: consecutive same-verdicts
-     required before the mute flips. Higher = calmer, slower.
+   HOW IT DECIDES: every 5s the tab is screenshotted and judged.
+   If the verdict matches the current state (or there is no state
+   yet), it applies immediately. If it DISAGREES, one more frame is
+   judged right away and the flip only happens if both agree.
    ================================================================ */
 const AI = {
-  MODEL: "gpt-5.6-luna",
-  PRICE_IN_PER_M: 0.2,
-  PRICE_OUT_PER_M: 1.2,
-  REASONING_EFFORT: "low",
+  MODEL: "gpt-5-nano",
+  PRICE_IN_PER_M: 0.05,
+  PRICE_OUT_PER_M: 0.4,
   MAX_TOKENS: 300,
   IMG_DETAIL: "low"
 };
-const MUTE_AFTER_ADS = 2;
-const UNMUTE_AFTER_GAMES = 2;
 const DEFAULT_WIDTH = 512;
-const VERIFY_COOLDOWN_MS = 5000;
-const HEARTBEAT_MS = 60000;
 
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
@@ -43,11 +38,10 @@ const LABELS = {
   error: "Error"
 };
 
-const inflight = new Set();
-const trailing = new Set();
+const busy = new Set();
 
 function defaultState() {
-  return { status: "off", adStreak: 0, gameStreak: 0, costs: [], avgCost: 0, lastVerify: 0, error: "" };
+  return { status: "off", costs: [], avgCost: 0, lastVerify: 0, error: "" };
 }
 
 async function loadState(tabId) {
@@ -74,22 +68,29 @@ async function ensureOffscreen() {
     }
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
-      reasons: ["BLOBS", "USER_MEDIA"],
-      justification: "Tab video sampling and shot detection for game detection"
+      reasons: ["BLOBS"],
+      justification: "Reliable 5s polling interval for game detection"
     });
   } catch (e) {
     if (!String(e && e.message).includes("Only a single offscreen")) throw e;
   }
 }
 
-async function sendToOffscreen(msg) {
-  await ensureOffscreen();
-  try {
-    return await chrome.runtime.sendMessage(msg);
-  } catch {
-    await new Promise((r) => setTimeout(r, 400));
-    return await chrome.runtime.sendMessage(msg);
+async function setEnabled(tabId, on) {
+  const tabs = await getEnabledTabs();
+  if (on) tabs[String(tabId)] = true;
+  else delete tabs[String(tabId)];
+  await chrome.storage.session.set({ enabledTabs: tabs });
+  if (on) {
+    await ensureOffscreen();
+    await saveState(tabId, { status: "on", error: "" });
+  } else {
+    try {
+      await chrome.tabs.update(tabId, { muted: false });
+    } catch {}
+    await chrome.storage.session.remove([`tab_${tabId}`]);
   }
+  await updateBadge(tabId);
 }
 
 async function updateBadge(tabId) {
@@ -109,34 +110,21 @@ async function updateBadge(tabId) {
   } catch {}
 }
 
-async function startStreamFor(tabId) {
-  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
-  await sendToOffscreen({ type: "startStream", tabId, streamId, width: DEFAULT_WIDTH });
-}
-
-async function setEnabled(tabId, on) {
-  const tabs = await getEnabledTabs();
-  if (on) tabs[String(tabId)] = true;
-  else delete tabs[String(tabId)];
-  await chrome.storage.session.set({ enabledTabs: tabs });
-  if (on) {
-    await ensureOffscreen();
-    await saveState(tabId, { status: "on", error: "" });
-    try {
-      await startStreamFor(tabId);
-    } catch (e) {
-      await saveState(tabId, { status: "error", error: String((e && e.message) || e) });
-    }
-  } else {
-    try {
-      await sendToOffscreen({ type: "stopStream", tabId });
-    } catch {}
-    try {
-      await chrome.tabs.update(tabId, { muted: false });
-    } catch {}
-    await chrome.storage.session.remove([`tab_${tabId}`]);
-  }
-  await updateBadge(tabId);
+async function captureFrame(tab, width) {
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 50 });
+  const blob = await (await fetch(dataUrl)).blob();
+  const bmp = await createImageBitmap(blob);
+  const height = Math.max(1, Math.round((bmp.height * width) / bmp.width));
+  const canvas = new OffscreenCanvas(width, height);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, width, height);
+  bmp.close();
+  const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.6 });
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(out);
+  });
 }
 
 async function classify(dataUrl, apiKey) {
@@ -148,7 +136,6 @@ async function classify(dataUrl, apiKey) {
     },
     body: JSON.stringify({
       model: AI.MODEL,
-      reasoning_effort: AI.REASONING_EFFORT,
       max_completion_tokens: AI.MAX_TOKENS,
       response_format: { type: "json_object" },
       messages: [
@@ -185,72 +172,65 @@ async function classify(dataUrl, apiKey) {
   return { isGame, cost };
 }
 
-async function applyVerdict(tabId, isGame, cost) {
+async function recordCost(tabId, cost) {
   const cur = await loadState(tabId);
   const costs = [...cur.costs, cost].slice(-10);
   await saveState(tabId, {
-    status: isGame ? "game" : "ad",
-    adStreak: isGame ? 0 : cur.adStreak + 1,
-    gameStreak: isGame ? cur.gameStreak + 1 : 0,
     costs,
     avgCost: costs.reduce((a, b) => a + b, 0) / costs.length,
-    lastVerify: Date.now(),
-    error: ""
+    lastVerify: Date.now()
   });
-  const next = await loadState(tabId);
-  if (isGame && next.gameStreak >= UNMUTE_AFTER_GAMES) {
-    try {
-      await chrome.tabs.update(tabId, { muted: false });
-    } catch {}
-  } else if (!isGame && next.adStreak >= MUTE_AFTER_ADS) {
-    try {
-      await chrome.tabs.update(tabId, { muted: true });
-    } catch {}
-  }
+}
+
+async function applyVerdict(tabId, isGame) {
+  await saveState(tabId, { status: isGame ? "game" : "ad", lastVerify: Date.now(), error: "" });
+  try {
+    await chrome.tabs.update(tabId, { muted: !isGame });
+  } catch {}
   await updateBadge(tabId);
 }
 
-async function getFrame(tabId) {
-  try {
-    const r = await sendToOffscreen({ type: "frame", tabId, width: DEFAULT_WIDTH });
-    if (r && r.dataUrl) return r.dataUrl;
-  } catch {}
-  await startStreamFor(tabId);
-  const retry = await sendToOffscreen({ type: "frame", tabId, width: DEFAULT_WIDTH });
-  if (retry && retry.dataUrl) return retry.dataUrl;
-  throw new Error("No video frame from tab");
+async function judge(tabId, tab, apiKey) {
+  const frame = await captureFrame(tab, DEFAULT_WIDTH);
+  return await classify(frame, apiKey);
 }
 
 async function verify(tabId) {
-  const tabs = await getEnabledTabs();
-  if (!tabs[String(tabId)]) return;
-  const { openaiKey } = await chrome.storage.local.get("openaiKey");
-  if (!openaiKey) {
-    await saveState(tabId, { status: "nokey" });
-    await updateBadge(tabId);
-    return;
-  }
-  await saveState(tabId, { status: "checking" });
-  const frame = await getFrame(tabId);
-  const { isGame, cost } = await classify(frame, openaiKey);
-  await applyVerdict(tabId, isGame, cost);
-}
-
-async function requestVerify(tabId, { force = false } = {}) {
-  if (inflight.has(tabId)) {
-    trailing.add(tabId);
-    return;
-  }
-  inflight.add(tabId);
+  if (busy.has(tabId)) return;
+  busy.add(tabId);
   try {
-    do {
-      trailing.delete(tabId);
-      if (!force) {
-        const cur = await loadState(tabId);
-        if (Date.now() - cur.lastVerify < VERIFY_COOLDOWN_MS) return;
-      }
-      await verify(tabId);
-    } while (trailing.has(tabId));
+    const tabs = await getEnabledTabs();
+    if (!tabs[String(tabId)]) return;
+    const { openaiKey } = await chrome.storage.local.get("openaiKey");
+    if (!openaiKey) {
+      await saveState(tabId, { status: "nokey" });
+      await updateBadge(tabId);
+      return;
+    }
+    let tab;
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch {
+      await setEnabled(tabId, false);
+      return;
+    }
+    if (!tab.active) return;
+    await saveState(tabId, { status: "checking" });
+    const first = await judge(tabId, tab, openaiKey);
+    await recordCost(tabId, first.cost);
+    const cur = await loadState(tabId);
+    const prev = cur.status === "game" ? true : cur.status === "ad" ? false : null;
+    if (prev === null || first.isGame === prev) {
+      await applyVerdict(tabId, first.isGame);
+      return;
+    }
+    const second = await judge(tabId, tab, openaiKey);
+    await recordCost(tabId, second.cost);
+    if (second.isGame === first.isGame) {
+      await applyVerdict(tabId, first.isGame);
+    } else {
+      await saveState(tabId, { lastVerify: Date.now() });
+    }
   } catch (e) {
     const tabs = await getEnabledTabs();
     if (tabs[String(tabId)]) {
@@ -258,16 +238,14 @@ async function requestVerify(tabId, { force = false } = {}) {
       await updateBadge(tabId);
     }
   } finally {
-    inflight.delete(tabId);
+    busy.delete(tabId);
   }
 }
 
 async function tick() {
   const tabs = await getEnabledTabs();
   for (const id of Object.keys(tabs)) {
-    const tabId = Number(id);
-    const cur = await loadState(tabId);
-    if (Date.now() - cur.lastVerify > HEARTBEAT_MS) requestVerify(tabId, { force: true });
+    await verify(Number(id));
   }
 }
 
@@ -275,9 +253,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (msg.type === "tick") {
       await tick();
-      sendResponse({ ok: true });
-    } else if (msg.type === "shot" || msg.type === "streamError") {
-      requestVerify(msg.tabId, {});
       sendResponse({ ok: true });
     } else if (msg.type === "toggle") {
       await setEnabled(msg.tabId, msg.on);
