@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { width: 240px; font-family: system-ui; padding: 12px; margin: 0; }
+input { width: 100%; box-sizing: border-box; margin: 6px 0; padding: 6px; }
+button { width: 100%; padding: 8px; margin-top: 6px; cursor: pointer; }
+.row { margin-top: 8px; font-size: 13px; }
+#status { font-weight: 600; }
+.hint { color: #666; font-size: 11px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<input id="key" type="password" placeholder="OpenAI API key (sk-...)">
+<button id="save">Save key</button>
+<div class="row">This tab: <span id="status">…</span></div>
+<button id="toggle">Turn ON for this tab</button>
+<div class="hint">Checks every 5s. Game = unmute, ad = mute. Turns off on refresh/close.</div>
+<script src="popup.js"></script>
+</body>
+</html>
