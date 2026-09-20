@@ -33,7 +33,7 @@ async function refreshInner() {
   document.getElementById("cost").textContent =
     state.lastCost === null || state.lastCost === undefined
       ? "—"
-      : `$${Number(state.lastCost).toFixed(6)}`;
+      : `$${Number(state.lastCost).toFixed(2)}`;
   document.getElementById("costk").textContent =
     state.ago < 0 ? "last check" : `last check · ${state.ago}s ago`;
   const mine = chrome.runtime.getManifest().version;
