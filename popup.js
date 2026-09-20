@@ -3,7 +3,20 @@ async function currentTab() {
   return tab;
 }
 
+let timer = 0;
+
 async function refresh() {
+  try {
+    await refreshInner();
+  } catch (e) {
+    if (String((e && e.message) || e).includes("Extension context invalidated") && timer) {
+      clearInterval(timer);
+      timer = 0;
+    }
+  }
+}
+
+async function refreshInner() {
   const tab = await currentTab();
   if (!tab) return;
   const state = await chrome.runtime.sendMessage({ type: "getState", tabId: tab.id });
@@ -32,10 +45,12 @@ async function refresh() {
 }
 
 document.getElementById("toggle").onchange = async (e) => {
-  const tab = await currentTab();
-  if (!tab) return;
-  await chrome.runtime.sendMessage({ type: "toggle", tabId: tab.id, on: e.target.checked });
-  refresh();
+  try {
+    const tab = await currentTab();
+    if (!tab) return;
+    await chrome.runtime.sendMessage({ type: "toggle", tabId: tab.id, on: e.target.checked });
+    refresh();
+  } catch {}
 };
 
 const gear = document.getElementById("gear");
@@ -49,14 +64,16 @@ gear.onclick = () => {
 };
 
 document.getElementById("save").onclick = async () => {
-  const key = document.getElementById("key").value.trim();
-  if (!key) return;
-  await chrome.runtime.sendMessage({ type: "setKey", key });
-  document.getElementById("key").value = "";
-  keypop.hidden = true;
-  gear.classList.remove("open");
-  gear.setAttribute("aria-expanded", "false");
-  refresh();
+  try {
+    const key = document.getElementById("key").value.trim();
+    if (!key) return;
+    await chrome.runtime.sendMessage({ type: "setKey", key });
+    document.getElementById("key").value = "";
+    keypop.hidden = true;
+    gear.classList.remove("open");
+    gear.setAttribute("aria-expanded", "false");
+    refresh();
+  } catch {}
 };
 
 chrome.storage.local.get("openaiKey").then(({ openaiKey }) => {
@@ -64,4 +81,4 @@ chrome.storage.local.get("openaiKey").then(({ openaiKey }) => {
 });
 
 refresh();
-setInterval(refresh, 1000);
+timer = setInterval(refresh, 1000);
