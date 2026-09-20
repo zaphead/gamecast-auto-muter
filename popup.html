@@ -15,12 +15,13 @@ button { width: 100%; padding: 8px; margin-top: 6px; cursor: pointer; }
 <input id="key" type="password" placeholder="OpenAI API key (sk-...)">
 <button id="save">Save key</button>
 <div class="row">This tab: <span id="status">…</span></div>
-<div class="row">Shot width: <span id="widthval">512</span>px</div>
+<div class="row">Shot width: <span id="widthval">512</span>px <span class="hint">(256–1024)</span></div>
 <input id="width" type="range" min="256" max="1024" step="64" value="512">
 <div class="row">Avg/frame: <span id="cost">—</span></div>
 <div class="hint" id="err"></div>
 <button id="toggle">Turn ON for this tab</button>
 <div class="hint">Checks every 5s. Game = unmute, ad = mute. Turns off on refresh/close.</div>
+<div class="hint" id="ver"></div>
 <script src="popup.js"></script>
 </body>
 </html>
