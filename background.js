@@ -25,8 +25,8 @@ const DEFAULT_WIDTH = 512;
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
   'Return JSON. Judge ONLY what is inside the video player (ignore browser chrome and surrounding page). ' +
-  '{"is_game": true} = player shows actual sportscast: live play, field/court/rink/players in action, score bug or scoreboard overlay. ' +
-  '{"is_game": false} = player shows ad, commercial, promo, "Ad" label or countdown, fullscreen product shot, break slate ("we will be right back", "coverage resumes shortly"), menu, loading, no game. ' +
+  '{"is_game": true} = player shows an actual sportscast' +
+  '{"is_game": false} = player shows ad or commercial.' +
   'Unsure = false.';
 
 const LABELS = {
@@ -266,6 +266,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
     } else if (msg.type === "toggle") {
       await setEnabled(msg.tabId, msg.on);
+      if (msg.on) await verify(msg.tabId);
       sendResponse({ ok: true });
     } else if (msg.type === "getState") {
       const tabs = await getEnabledTabs();
