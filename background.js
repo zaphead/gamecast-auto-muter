@@ -11,7 +11,8 @@
    If the verdict matches the current state (or there is no state
    yet), it applies immediately. If it DISAGREES, 3 fresh frames are
    judged in parallel and the flip only happens if at least 2 of
-   the 3 agree with the dissenter.
+   the 3 agree with the dissenter. Blank replies get one instant
+   retry; 3 blanks in a row surfaces an error, fewer stay silent.
    ================================================================ */
 const AI = {
   MODEL: "gpt-5-nano",
@@ -43,7 +44,7 @@ const LABELS = {
 const busy = new Set();
 
 function defaultState() {
-  return { status: "off", lastCost: null, lastVerify: 0, error: "" };
+  return { status: "off", lastCost: null, lastVerify: 0, emptyStreak: 0, error: "" };
 }
 
 async function loadState(tabId) {
@@ -160,23 +161,18 @@ async function classify(dataUrl, apiKey) {
   }
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content || "";
-  if (!content.trim()) throw new Error("Empty response from model");
   const u = json.usage || {};
   const rawCost = ((u.prompt_tokens || 0) * AI.PRICE_IN_PER_M + (u.completion_tokens || 0) * AI.PRICE_OUT_PER_M) / 1e6;
   const cost = Number.isFinite(rawCost) ? rawCost : 0;
-  let isGame;
+  if (!content.trim()) return { isGame: null, cost };
   const word = content.trim().toLowerCase().match(/^(true|false)\b/);
-  if (word) {
-    isGame = word[1] === "true";
-  } else {
-    const any = content.toLowerCase().match(/\b(true|false)\b/);
-    isGame = any ? any[1] === "true" : false;
-  }
-  return { isGame, cost };
+  if (word) return { isGame: word[1] === "true", cost };
+  const any = content.toLowerCase().match(/\b(true|false)\b/);
+  return { isGame: any ? any[1] === "true" : null, cost };
 }
 
 async function recordCost(tabId, cost) {
-  await saveState(tabId, { lastCost: cost, lastVerify: Date.now() });
+  await saveState(tabId, { lastCost: cost, lastVerify: Date.now(), emptyStreak: 0 });
 }
 
 async function applyVerdict(tabId, isGame) {
@@ -213,7 +209,21 @@ async function verify(tabId) {
     }
     if (!tab.active) return;
     await saveState(tabId, { status: "checking" });
-    const first = await judge(tabId, tab, openaiKey);
+    let first = await judge(tabId, tab, openaiKey);
+    if (first.isGame === null) first = await judge(tabId, tab, openaiKey);
+    if (first.isGame === null) {
+      const streak = (await loadState(tabId)).emptyStreak + 1;
+      await saveState(tabId, {
+        lastCost: first.cost,
+        lastVerify: Date.now(),
+        emptyStreak: streak,
+        ...(streak >= 3
+          ? { status: "error", error: `Empty response from the model ×${streak}` }
+          : {})
+      });
+      if (streak >= 3) await updateBadge(tabId);
+      return;
+    }
     await recordCost(tabId, first.cost);
     const cur = await loadState(tabId);
     const prev = cur.status === "game" ? true : cur.status === "ad" ? false : null;
