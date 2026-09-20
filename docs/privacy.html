@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GameCast Auto-Muter — Privacy Policy</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.6; color: #1a1d21; background: #f6f7f9; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 20px 64px; }
+  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 32px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .meta { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+  h2 { font-size: 18px; margin: 28px 0 8px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 22px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #f1f3f5; padding: 1px 6px; border-radius: 6px; }
+  a { color: #0b5fff; }
+  footer { margin-top: 28px; font-size: 13px; color: #6b7280; }
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>GameCast Auto-Muter — Privacy Policy</h1>
+<div class="meta">Effective date: September 20, 2026</div>
+
+<p>GameCast Auto-Muter watches a tab you choose, tells live sports apart from full-screen ads, and mutes or unmutes that tab for you. This policy explains what data the extension touches and why, in plain language.</p>
+
+<h2>What the extension does</h2>
+<p>When you turn the extension on for a tab, about every 15 seconds it takes a screenshot of that tab and sends the image to the OpenAI Chat Completions API, which classifies it as live game or full-screen ad. If it's an ad, the tab is muted; if it's the game, the tab is unmuted. Turning the extension off, navigating, refreshing, or closing the tab stops monitoring for that tab.</p>
+
+<h2>Data collected and why</h2>
+<ul>
+  <li><strong>Tab screenshots (only when you enable monitoring).</strong> A downscaled JPEG snapshot of the enabled tab is captured and sent to OpenAI solely to classify game vs. ad. Screenshots are never captured for tabs you haven't enabled, and never captured once monitoring stops.</li>
+  <li><strong>Your OpenAI API key (you provide it).</strong> You paste your own key into the extension popup. It is used only to authenticate your classification requests to OpenAI and to remember that you saved a key (so the popup can show a "Saved" placeholder).</li>
+  <li><strong>Settings and status.</strong> Which tabs are enabled, plus per-tab status (e.g. game/ad, last check time, session cost totals) are kept so the extension works across popup opens and shows you what it's doing.</li>
+</ul>
+
+<h2>How data is processed</h2>
+<ul>
+  <li>Screenshots are sent over HTTPS to <code>https://api.openai.com/v1/chat/completions</code> with your API key, along with a short text prompt asking for a game-vs-ad verdict. OpenAI processes that request under OpenAI's own policies.</li>
+  <li>No other hosts receive anything. The extension talks to no servers of its own.</li>
+</ul>
+
+<h2>What stays on your device</h2>
+<ul>
+  <li>Your API key is stored in <code>chrome.storage.local</code> on your device. It is never sent anywhere except OpenAI's API as the authorization for your requests.</li>
+  <li>Enabled-tab state and per-tab status live in <code>chrome.storage.session</code> and are cleared when the browser session ends or when you turn monitoring off.</li>
+  <li>The extension runs no accounts, no analytics SDKs, and shows no ads.</li>
+</ul>
+
+<h2>Retention</h2>
+<ul>
+  <li><strong>Screenshots</strong> are ephemeral: each frame is classified and discarded. The extension keeps no gallery or history of images.</li>
+  <li><strong>Your API key</strong> stays in local device storage until you replace it, clear it via browser storage management, or uninstall the extension.</li>
+  <li><strong>Session state</strong> (enabled tabs, statuses, cost counters) is discarded when the session ends or monitoring is turned off.</li>
+</ul>
+
+<h2>Third parties</h2>
+<p>The only third party is <strong>OpenAI</strong> (the classification provider you connect with your own key). Review OpenAI's privacy policy and terms before use, since your screenshots and API usage are subject to them. There are no other third parties, trackers, or data recipients.</p>
+
+<h2>No sale of data</h2>
+<p>We do not sell, rent, or share your personal data or screenshots with anyone for marketing or advertising. There is nothing to sell: the extension has no backend and collects nothing for itself.</p>
+
+<h2>Permissions used and why</h2>
+<ul>
+  <li><code>tabs</code> / <code>activeTab</code> — find the tab you enabled, check it's active, capture its screenshot, and mute/unmute it.</li>
+  <li><code>storage</code> — keep your API key (local) and session state (session).</li>
+  <li><code>offscreen</code> — run the periodic check timer.</li>
+  <li>Host permission <code>https://api.openai.com/*</code> — send classification requests to OpenAI and nothing else.</li>
+</ul>
+
+<h2>Children's privacy</h2>
+<p>The extension is a general-purpose utility, not directed at children, and knowingly collects no children's data. Questions about a child's data should go to the contact below.</p>
+
+<h2>Your control</h2>
+<ul>
+  <li>Turn monitoring off for a tab any time with the popup toggle — screenshots stop immediately.</li>
+  <li>Remove your API key by clearing the extension's local storage or uninstalling the extension.</li>
+  <li>Uninstalling removes everything the extension stored on your device.</li>
+</ul>
+
+<h2>Changes to this policy</h2>
+<p>If the extension's data handling changes, this page will be updated and the effective date revised.</p>
+
+<h2>Contact</h2>
+<p>Privacy questions: <a href="mailto:spencer@sharpstack.cloud">spencer@sharpstack.cloud</a></p>
+
+<footer>GameCast Auto-Muter · publisher contact: spencer@sharpstack.cloud</footer>
+</div>
+</main>
+</body>
+</html>
