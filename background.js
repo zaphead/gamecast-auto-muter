@@ -5,8 +5,6 @@
      true/false text out, no JSON anywhere.
    - MAX_TOKENS: ceiling for the answer. Too low starves the reply
      (empty responses); 300 is plenty for true/false.
-   - TEMPERATURE: 0 = deterministic. If the model ever 400s on
-     temperature, delete that line from the request below.
    - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
    HOW IT DECIDES: every 5s the tab is screenshotted and judged.
@@ -20,8 +18,7 @@ const AI = {
   PRICE_IN_PER_M: 0.05,
   PRICE_OUT_PER_M: 0.4,
   MAX_TOKENS: 300,
-  IMG_DETAIL: "low",
-  TEMPERATURE: 0
+  IMG_DETAIL: "low"
 };
 const DEFAULT_WIDTH = 512;
 const CODE_VERSION = "0.6.1";
@@ -141,7 +138,6 @@ async function classify(dataUrl, apiKey) {
     },
     body: JSON.stringify({
       model: AI.MODEL,
-      temperature: AI.TEMPERATURE,
       max_completion_tokens: AI.MAX_TOKENS,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
