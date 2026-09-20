@@ -5,6 +5,8 @@
      true/false text out, no JSON anywhere.
    - MAX_TOKENS: ceiling for the answer. Too low starves the reply
      (empty responses); 300 is plenty for true/false.
+   - REASONING_EFFORT: "minimal" keeps answers instant and decisive.
+     Higher spends more tokens thinking (and can starve the reply).
    - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
    HOW IT DECIDES: every 5s the tab is screenshotted and judged.
@@ -19,14 +21,15 @@ const AI = {
   PRICE_IN_PER_M: 0.05,
   PRICE_OUT_PER_M: 0.4,
   MAX_TOKENS: 300,
-  IMG_DETAIL: "low"
+  IMG_DETAIL: "low",
+  REASONING_EFFORT: "minimal"
 };
 const DEFAULT_WIDTH = 512;
 const CODE_VERSION = "0.6.1";
 
-const SYSTEM_PROMPT = 'Binary sports-vs-ad classifier. Output ONLY the word true or false. No other text, no punctuation, no JSON.';
+const SYSTEM_PROMPT = 'Binary sports-vs-ad classifier. Output ONLY the word true or false. No other text, no punctuation, no JSON. An answer is always required — never reply empty. If unsure, make your best guess.';
 const USER_PROMPT =
-  'Look at the image. Reply true or false, nothing else. ' +
+  'Look at the image. Reply true or false, nothing else. You must always answer — never leave the reply blank; when in doubt, guess. ' +
   'true = actual sportscast visible: live play, field/court/rink, players/refs/ball, score bug, sideline, halftime desk talking ball. ' +
   'false = full-screen ad, commercial, promo, black screen, menu, loading spinner, no game. ' +
   'Unsure? Reply false.';
@@ -140,6 +143,7 @@ async function classify(dataUrl, apiKey) {
     body: JSON.stringify({
       model: AI.MODEL,
       max_completion_tokens: AI.MAX_TOKENS,
+      reasoning_effort: AI.REASONING_EFFORT,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
