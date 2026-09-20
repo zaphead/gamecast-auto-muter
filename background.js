@@ -21,6 +21,7 @@ const AI = {
   IMG_DETAIL: "low"
 };
 const DEFAULT_WIDTH = 512;
+const CODE_VERSION = "0.6.1";
 
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
@@ -42,7 +43,7 @@ const LABELS = {
 const busy = new Set();
 
 function defaultState() {
-  return { status: "off", costs: [], avgCost: 0, lastVerify: 0, error: "" };
+  return { status: "off", lastCost: null, lastVerify: 0, error: "" };
 }
 
 async function loadState(tabId) {
@@ -174,13 +175,7 @@ async function classify(dataUrl, apiKey) {
 }
 
 async function recordCost(tabId, cost) {
-  const cur = await loadState(tabId);
-  const costs = [...cur.costs, cost].slice(-10);
-  await saveState(tabId, {
-    costs,
-    avgCost: costs.reduce((a, b) => a + b, 0) / costs.length,
-    lastVerify: Date.now()
-  });
+  await saveState(tabId, { lastCost: cost, lastVerify: Date.now() });
 }
 
 async function applyVerdict(tabId, isGame) {
@@ -276,12 +271,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({
         enabled,
         hasKey: !!openaiKey,
+        code: CODE_VERSION,
         status: enabled ? cur.status : "off",
         label: enabled ? LABELS[cur.status] || cur.status : LABELS.off,
         ago: cur.lastVerify ? Math.max(0, Math.round((Date.now() - cur.lastVerify) / 1000)) : -1,
         error: cur.error,
-        avgCost: cur.avgCost,
-        frames: cur.costs.length
+        lastCost: cur.lastCost
       });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });

@@ -17,13 +17,18 @@ async function refresh() {
   const toggle = document.getElementById("toggle");
   if (document.activeElement !== toggle) toggle.checked = !!state.enabled;
   document.getElementById("powerlabel").textContent = state.enabled ? "On — this tab" : "Off";
-  document.getElementById("cost").textContent = state.frames
-    ? `$${Number(state.avgCost || 0).toFixed(6)}`
-    : "—";
-  document.getElementById("costk").textContent = state.frames
-    ? `avg/f · ${state.frames}f · ${state.ago < 0 ? "?" : state.ago + "s"}`
-    : "avg / frame";
-  document.getElementById("ver").textContent = `v${chrome.runtime.getManifest().version}`;
+  document.getElementById("cost").textContent =
+    state.lastCost === null || state.lastCost === undefined
+      ? "—"
+      : `$${Number(state.lastCost).toFixed(6)}`;
+  document.getElementById("costk").textContent =
+    state.ago < 0 ? "last check" : `last check · ${state.ago}s ago`;
+  const mine = chrome.runtime.getManifest().version;
+  document.getElementById("ver").textContent = `v${mine}`;
+  if (state.code && state.code !== mine) {
+    document.getElementById("status").textContent = "Reload needed";
+    document.getElementById("led").className = "led error";
+  }
 }
 
 document.getElementById("toggle").onchange = async (e) => {
