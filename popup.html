@@ -133,11 +133,14 @@
   .meter { flex: 1; min-width: 0; overflow: hidden; }
   .meter .v { font-size: 20px; font-weight: 700; color: #dfe2e8; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .meter .k { font-size: 10px; letter-spacing: 0.1em; color: #5d626b; text-transform: uppercase; margin-top: 2px; white-space: nowrap; }
-  .foot { margin-top: 12px; font-size: 10px; line-height: 1.5; color: #565b64; }
-  #ver { float: right; font-variant-numeric: tabular-nums; }
+  #ver { font-size: 10px; color: #565b64; font-variant-numeric: tabular-nums; }
+  .titlebar { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 2px 10px; }
+  .title { font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #dfe2e8; text-shadow: 0 -1px 0 rgba(0,0,0,0.9); }
 </style>
 </head>
 <body>
+  <div class="titlebar"><span class="title">Gamecast</span><span id="ver"></span></div>
+
   <div class="well toprow">
     <span class="powerlabel" id="powerlabel">Off</span>
     <button class="iconbtn" id="gear" aria-label="API key settings" aria-expanded="false">
@@ -168,7 +171,6 @@
     <div class="well meter"><div class="v" id="mode">—</div><div class="k">mode</div></div>
   </div>
 
-  <div class="foot">Checks on cuts + signals, 60s heartbeat. Mutes ads, frees the game.<span id="ver"></span></div>
   <script src="popup.js"></script>
 </body>
 </html>
