@@ -16,22 +16,6 @@ function drawFrame(video, width) {
   return canvas.toDataURL("image/jpeg", 0.6);
 }
 
-function resizeImage(dataUrl, width) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = width / img.width;
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.6));
-    };
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
-}
-
 async function startStream(tabId, streamId, width) {
   stopStream(tabId);
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -80,13 +64,7 @@ function sample(tabId) {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
-    if (msg.type === "resize") {
-      try {
-        sendResponse({ dataUrl: await resizeImage(msg.dataUrl, msg.width || 512) });
-      } catch {
-        sendResponse({});
-      }
-    } else if (msg.type === "startStream") {
+    if (msg.type === "startStream") {
       try {
         await startStream(msg.tabId, msg.streamId, msg.width);
         sendResponse({ ok: true });

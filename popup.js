@@ -7,15 +7,7 @@ async function refresh() {
   const tab = await currentTab();
   if (!tab) return;
   const state = await chrome.runtime.sendMessage({ type: "getState", tabId: tab.id });
-  const labels = {
-    off: "Off",
-    checking: "Checking",
-    game: "Game",
-    ad: "Ad",
-    nokey: "No key",
-    error: "Error"
-  };
-  document.getElementById("status").textContent = state.enabled ? labels[state.status] || state.status : "Off";
+  document.getElementById("status").textContent = state.label || state.status;
   const led = document.getElementById("led");
   led.className = "led" + (state.enabled ? ` ${state.status}` : "");
   const errEl = document.getElementById("err");
@@ -31,7 +23,6 @@ async function refresh() {
   document.getElementById("costk").textContent = state.frames
     ? `avg/f · ${state.frames}f · ${state.ago < 0 ? "?" : state.ago + "s"}`
     : "avg / frame";
-  document.getElementById("mode").textContent = state.enabled ? state.mode || "live" : "—";
   document.getElementById("ver").textContent = `v${chrome.runtime.getManifest().version}`;
 }
 

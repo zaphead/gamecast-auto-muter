@@ -129,8 +129,6 @@
     transition-duration: 0.12s;
   }
   .btn:active { transform: translateY(2px) scale(0.99); box-shadow: 0 0 0 #0a0b0d, 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
-  .metergrid { display: flex; gap: 8px; }
-  .meter { flex: 1; min-width: 0; overflow: hidden; }
   .meter .v { font-size: 20px; font-weight: 700; color: #dfe2e8; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .meter .k { font-size: 10px; letter-spacing: 0.1em; color: #5d626b; text-transform: uppercase; margin-top: 2px; white-space: nowrap; }
   #ver { font-size: 10px; color: #565b64; font-variant-numeric: tabular-nums; }
@@ -166,10 +164,7 @@
   </div>
 
   <div class="label">Telemetry</div>
-  <div class="metergrid">
-    <div class="well meter"><div class="v" id="cost">—</div><div class="k" id="costk">avg / frame</div></div>
-    <div class="well meter"><div class="v" id="mode">—</div><div class="k">mode</div></div>
-  </div>
+  <div class="well meter"><div class="v" id="cost">—</div><div class="k" id="costk">avg / frame</div></div>
 
   <script src="popup.js"></script>
 </body>
