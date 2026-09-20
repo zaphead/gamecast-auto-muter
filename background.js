@@ -9,7 +9,7 @@
      Higher spends more tokens thinking (and can starve the reply).
    - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
-   HOW IT DECIDES: every 5s the tab is screenshotted and judged.
+   HOW IT DECIDES: every 15s the tab is screenshotted and judged.
    If the verdict matches the current state (or there is no state
    yet), it applies immediately. If it DISAGREES, 3 fresh frames are
    judged in parallel and the flip only happens if at least 2 of
