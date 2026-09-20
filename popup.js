@@ -35,8 +35,8 @@ async function refreshInner() {
       ? "—"
       : `${(Number(state.lastCost) * 100).toFixed(4)}¢`;
   const agoTxt = state.ago < 0 ? "?" : `${state.ago}s`;
-  document.getElementById("costk").textContent =
-    `total ${((Number(state.sessionTotal) || 0) * 100).toFixed(2)}¢ · ${agoTxt} ago`;
+  document.getElementById("total").textContent = `$${(Number(state.sessionTotal) || 0).toFixed(2)}`;
+  document.getElementById("costk").textContent = `last check · ${agoTxt} ago`;
   const mine = chrome.runtime.getManifest().version;
   document.getElementById("ver").textContent = `v${mine}`;
   if (!state.code || state.code !== mine) {

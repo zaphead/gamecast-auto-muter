@@ -131,6 +131,7 @@
   .btn:active { transform: translateY(2px) scale(0.99); box-shadow: 0 0 0 #0a0b0d, 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
   .meter .v { font-size: 20px; font-weight: 700; color: #dfe2e8; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .meter .k { font-size: 10px; letter-spacing: 0.1em; color: #5d626b; text-transform: uppercase; margin-top: 2px; white-space: nowrap; }
+  .metarow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   #ver { font-size: 10px; color: #565b64; font-variant-numeric: tabular-nums; }
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 2px 10px; }
   .title { font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #dfe2e8; text-shadow: 0 -1px 0 rgba(0,0,0,0.9); }
@@ -164,7 +165,7 @@
   </div>
 
   <div class="label">Telemetry</div>
-    <div class="well meter"><div class="v" id="cost">—</div><div class="k" id="costk">last check</div></div>
+    <div class="well meter"><div class="metarow"><span class="v" id="cost">—</span><span class="v" id="total">—</span></div><div class="k" id="costk">last check</div></div>
 
   <script src="popup.js"></script>
 </body>
