@@ -9,8 +9,9 @@
    - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
    HOW IT DECIDES: every 5s the tab is screenshotted and judged.
    If the verdict matches the current state (or there is no state
-   yet), it applies immediately. If it DISAGREES, one more frame is
-   judged right away and the flip only happens if both agree.
+   yet), it applies immediately. If it DISAGREES, 3 fresh frames are
+   judged in parallel and the flip only happens if at least 2 of
+   the 3 agree with the dissenter.
    ================================================================ */
 const AI = {
   MODEL: "gpt-5-nano",
@@ -224,9 +225,18 @@ async function verify(tabId) {
       await applyVerdict(tabId, first.isGame);
       return;
     }
-    const second = await judge(tabId, tab, openaiKey);
-    await recordCost(tabId, second.cost);
-    if (second.isGame === first.isGame) {
+    const panel = await Promise.allSettled([
+      judge(tabId, tab, openaiKey),
+      judge(tabId, tab, openaiKey),
+      judge(tabId, tab, openaiKey)
+    ]);
+    let votes = 0;
+    for (const r of panel) {
+      if (r.status !== "fulfilled") continue;
+      await recordCost(tabId, r.value.cost);
+      if (r.value.isGame === first.isGame) votes++;
+    }
+    if (votes >= 2) {
       await applyVerdict(tabId, first.isGame);
     } else {
       await saveState(tabId, { lastVerify: Date.now() });
