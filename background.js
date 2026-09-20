@@ -4,10 +4,11 @@ const MODEL = "gpt-5-nano";
 const PRICE_IN_PER_M = 0.05;
 const PRICE_OUT_PER_M = 0.4;
 
-const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text.';
+const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
-  'Return JSON. {"is_game": true} = actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
-  '{"is_game": false} = full-screen ad, commercial, promo, menu, loading, no game. Unsure = false.';
+  'Return JSON. Judge ONLY what is inside the video player (ignore browser chrome and surrounding page). ' +
+  '{"is_game": true} = player shows actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
+  '{"is_game": false} = player shows ad, commercial, promo, menu, loading, no game. Unsure = false.';
 
 async function ensureOffscreen() {
   try {
