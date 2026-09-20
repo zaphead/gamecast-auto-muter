@@ -19,6 +19,12 @@ async function refresh() {
   };
   statusEl.textContent = state.enabled ? labels[state.status] || state.status : "off";
   document.getElementById("err").textContent = state.status === "error" && state.error ? state.error : "";
+  const slider = document.getElementById("width");
+  if (document.activeElement !== slider) slider.value = state.width;
+  document.getElementById("widthval").textContent = state.width;
+  document.getElementById("cost").textContent = state.frames
+    ? `$${state.avgCost.toFixed(6)} (${state.frames} frames)`
+    : "—";
   toggleEl.textContent = state.enabled ? "Turn OFF for this tab" : "Turn ON for this tab";
   toggleEl.onclick = async () => {
     await chrome.runtime.sendMessage({ type: "toggle", tabId: tab.id, on: !state.enabled });
@@ -31,6 +37,11 @@ document.getElementById("save").onclick = async () => {
   if (!key) return;
   await chrome.runtime.sendMessage({ type: "setKey", key });
   document.getElementById("key").value = "";
+  refresh();
+};
+
+document.getElementById("width").onchange = async (e) => {
+  await chrome.runtime.sendMessage({ type: "setWidth", width: Number(e.target.value) });
   refresh();
 };
 

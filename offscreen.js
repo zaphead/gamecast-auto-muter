@@ -20,7 +20,7 @@ function resizeImage(dataUrl, width) {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "resize") {
-    resizeImage(msg.dataUrl, msg.width || 300).then(
+    resizeImage(msg.dataUrl, msg.width || 512).then(
       (dataUrl) => sendResponse({ dataUrl }),
       () => sendResponse({})
     );

@@ -1,6 +1,8 @@
 const POLL_NOTE = "polling lives in offscreen.js";
-const RESIZE_WIDTH = 300;
+const DEFAULT_WIDTH = 512;
 const MODEL = "gpt-5-nano";
+const PRICE_IN_PER_M = 0.05;
+const PRICE_OUT_PER_M = 0.4;
 
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text.';
 const USER_PROMPT =
@@ -82,17 +84,22 @@ async function classify(dataUrl, apiKey) {
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content || "";
   if (!content.trim()) throw new Error("Empty response from model");
+  const u = json.usage || {};
+  const cost = ((u.prompt_tokens || 0) * PRICE_IN_PER_M + (u.completion_tokens || 0) * PRICE_OUT_PER_M) / 1e6;
+  let isGame;
   try {
-    return JSON.parse(content).is_game === true;
+    isGame = JSON.parse(content).is_game === true;
   } catch {
-    return /"is_game"\s*:\s*true/.test(content);
+    isGame = /"is_game"\s*:\s*true/.test(content);
   }
+  return { isGame, cost };
 }
 
 async function checkTab(tabId) {
   const tabs = await getEnabledTabs();
   if (!tabs[String(tabId)]) return;
-  const { openaiKey } = await chrome.storage.local.get("openaiKey");
+  const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
+  const width = shotWidth || DEFAULT_WIDTH;
   if (!openaiKey) {
     await chrome.storage.session.set({ [`st_${tabId}`]: "nokey" });
     await updateBadge(tabId, true);
@@ -115,12 +122,18 @@ async function checkTab(tabId) {
   const resized = await chrome.runtime.sendMessage({
     type: "resize",
     dataUrl,
-    width: RESIZE_WIDTH
+    width
   });
-  const isGame = await classify(resized.dataUrl || dataUrl, openaiKey);
+  const { isGame, cost } = await classify(resized.dataUrl || dataUrl, openaiKey);
+  const costKey = `costs_${tabId}`;
+  const prev = (await chrome.storage.session.get(costKey))[costKey] || [];
+  const costs = [...prev, cost].slice(-10);
+  const avgCost = costs.reduce((a, b) => a + b, 0) / costs.length;
   await chrome.storage.session.set({
     [`st_${tabId}`]: isGame ? "game" : "ad",
-    [`ts_${tabId}`]: Date.now()
+    [`ts_${tabId}`]: Date.now(),
+    [costKey]: costs,
+    [`avg_${tabId}`]: avgCost
   });
   await chrome.storage.session.remove([`err_${tabId}`]);
   await chrome.tabs.update(tabId, { muted: !isGame });
@@ -150,20 +163,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         try {
           await chrome.tabs.update(msg.tabId, { muted: false });
         } catch {}
-        await chrome.storage.session.remove([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`]);
+        await chrome.storage.session.remove([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`, `avg_${msg.tabId}`, `costs_${msg.tabId}`]);
       }
       sendResponse({ ok: true });
     } else if (msg.type === "getState") {
       const tabs = await getEnabledTabs();
-      const { openaiKey } = await chrome.storage.local.get("openaiKey");
-      const st = await chrome.storage.session.get([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`]);
+      const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
+      const st = await chrome.storage.session.get([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`, `avg_${msg.tabId}`, `costs_${msg.tabId}`]);
       sendResponse({
         enabled: !!tabs[String(msg.tabId)],
         hasKey: !!openaiKey,
         status: st[`st_${msg.tabId}`] || "off",
         ts: st[`ts_${msg.tabId}`] || 0,
-        error: st[`err_${msg.tabId}`] || ""
+        error: st[`err_${msg.tabId}`] || "",
+        width: shotWidth || DEFAULT_WIDTH,
+        avgCost: st[`avg_${msg.tabId}`] || 0,
+        frames: (st[`costs_${msg.tabId}`] || []).length
       });
+    } else if (msg.type === "setWidth") {
+      await chrome.storage.local.set({ shotWidth: msg.width });
+      sendResponse({ ok: true });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });
       sendResponse({ ok: true });
@@ -174,7 +193,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await setEnabled(tabId, false);
-  await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`]);
+  await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`, `err_${tabId}`, `avg_${tabId}`, `costs_${tabId}`]);
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
@@ -185,7 +204,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
       try {
         await chrome.tabs.update(tabId, { muted: false });
       } catch {}
-      await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`]);
+      await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`, `err_${tabId}`, `avg_${tabId}`, `costs_${tabId}`]);
     }
   }
 });
