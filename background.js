@@ -1,16 +1,37 @@
+/* ================================================================
+   AI SETTINGS — toggle the model, prompt, and params HERE.
+   - MODEL: any vision chat-model id (e.g. "gpt-5.6-luna").
+   - SYSTEM_PROMPT / USER_PROMPT: the classifier prompt. NOTE: keep
+     the word "JSON" in there or json_object mode 400s.
+   - REASONING_EFFORT: "none" | "low" | "medium" | "high". Higher =
+     smarter verdicts but pricier + slower. "low" is the sweet spot.
+   - MAX_TOKENS: ceiling for reasoning + answer. Too low starves
+     the answer (empty replies); 300 is plenty for true/false.
+   - IMG_DETAIL: "low" (cheap, ~85 tokens) | "high" (hungry).
+   - PRICE_IN/OUT_PER_M: $ per 1M tokens. Feeds the avg/frame math.
+   - MUTE_AFTER_ADS / UNMUTE_AFTER_GAMES: consecutive same-verdicts
+     required before the mute flips. Higher = calmer, slower.
+   ================================================================ */
+const AI = {
+  MODEL: "gpt-5.6-luna",
+  PRICE_IN_PER_M: 0.2,
+  PRICE_OUT_PER_M: 1.2,
+  REASONING_EFFORT: "low",
+  MAX_TOKENS: 300,
+  IMG_DETAIL: "low"
+};
+const MUTE_AFTER_ADS = 2;
+const UNMUTE_AFTER_GAMES = 2;
 const DEFAULT_WIDTH = 512;
-const MODEL = "gpt-5-nano";
-const PRICE_IN_PER_M = 0.05;
-const PRICE_OUT_PER_M = 0.4;
 const VERIFY_COOLDOWN_MS = 5000;
 const HEARTBEAT_MS = 60000;
-const MUTE_AFTER_STREAK = 2;
 
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
   'Return JSON. Judge ONLY what is inside the video player (ignore browser chrome and surrounding page). ' +
-  '{"is_game": true} = player shows actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
-  '{"is_game": false} = player shows ad, commercial, promo, menu, loading, no game. Unsure = false.';
+  '{"is_game": true} = player shows actual sportscast: live play, field/court/rink/players in action, score bug or scoreboard overlay. ' +
+  '{"is_game": false} = player shows ad, commercial, promo, "Ad" label or countdown, fullscreen product shot, break slate ("we will be right back", "coverage resumes shortly"), menu, loading, no game. ' +
+  'Unsure = false.';
 
 const debounceTimers = {};
 
@@ -107,9 +128,9 @@ async function classify(dataUrl, apiKey) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: MODEL,
-      reasoning_effort: "minimal",
-      max_completion_tokens: 300,
+      model: AI.MODEL,
+      reasoning_effort: AI.REASONING_EFFORT,
+      max_completion_tokens: AI.MAX_TOKENS,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -117,7 +138,7 @@ async function classify(dataUrl, apiKey) {
           role: "user",
           content: [
             { type: "text", text: USER_PROMPT },
-            { type: "image_url", image_url: { url: dataUrl, detail: "low" } }
+            { type: "image_url", image_url: { url: dataUrl, detail: AI.IMG_DETAIL } }
           ]
         }
       ]
@@ -134,7 +155,8 @@ async function classify(dataUrl, apiKey) {
   const content = json.choices?.[0]?.message?.content || "";
   if (!content.trim()) throw new Error("Empty response from model");
   const u = json.usage || {};
-  const cost = ((u.prompt_tokens || 0) * PRICE_IN_PER_M + (u.completion_tokens || 0) * PRICE_OUT_PER_M) / 1e6;
+  const rawCost = ((u.prompt_tokens || 0) * AI.PRICE_IN_PER_M + (u.completion_tokens || 0) * AI.PRICE_OUT_PER_M) / 1e6;
+  const cost = Number.isFinite(rawCost) ? rawCost : 0;
   let isGame;
   try {
     isGame = JSON.parse(content).is_game === true;
@@ -149,9 +171,13 @@ async function applyVerdict(tabId, isGame, cost) {
   const prev = (await chrome.storage.session.get(costKey))[costKey] || [];
   const costs = [...prev, cost].slice(-10);
   const avgCost = costs.reduce((a, b) => a + b, 0) / costs.length;
-  let streak = 0;
-  if (!isGame) {
-    streak = ((await chrome.storage.session.get(`streak_${tabId}`))[`streak_${tabId}`] || 0) + 1;
+  const s = await chrome.storage.session.get([`streak_${tabId}`, `gstreak_${tabId}`]);
+  let adStreak = 0;
+  let gameStreak = 0;
+  if (isGame) {
+    gameStreak = (s[`gstreak_${tabId}`] || 0) + 1;
+  } else {
+    adStreak = (s[`streak_${tabId}`] || 0) + 1;
   }
   await chrome.storage.session.set({
     [`st_${tabId}`]: isGame ? "game" : "ad",
@@ -159,12 +185,13 @@ async function applyVerdict(tabId, isGame, cost) {
     [`vv_${tabId}`]: Date.now(),
     [costKey]: costs,
     [`avg_${tabId}`]: avgCost,
-    [`streak_${tabId}`]: streak
+    [`streak_${tabId}`]: adStreak,
+    [`gstreak_${tabId}`]: gameStreak
   });
   await chrome.storage.session.remove([`err_${tabId}`]);
-  if (isGame) {
+  if (isGame && gameStreak >= UNMUTE_AFTER_GAMES) {
     await chrome.tabs.update(tabId, { muted: false });
-  } else if (streak >= MUTE_AFTER_STREAK) {
+  } else if (!isGame && adStreak >= MUTE_AFTER_ADS) {
     await chrome.tabs.update(tabId, { muted: true });
   }
   await updateBadge(tabId, true);
@@ -251,6 +278,7 @@ function clearTabState(tabId) {
     `avg_${tabId}`,
     `costs_${tabId}`,
     `streak_${tabId}`,
+    `gstreak_${tabId}`,
     `vv_${tabId}`
   ]);
 }
@@ -291,11 +319,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         `avg_${msg.tabId}`,
         `costs_${msg.tabId}`
       ]);
+      const tsVal = st[`ts_${msg.tabId}`] || 0;
       sendResponse({
         enabled: !!tabs[String(msg.tabId)],
         hasKey: !!openaiKey,
         status: st[`st_${msg.tabId}`] || "off",
-        ts: st[`ts_${msg.tabId}`] || 0,
+        ts: tsVal,
+        ago: tsVal ? Math.max(0, Math.round((Date.now() - tsVal) / 1000)) : -1,
         error: st[`err_${msg.tabId}`] || "",
         avgCost: st[`avg_${msg.tabId}`] || 0,
         frames: (st[`costs_${msg.tabId}`] || []).length,

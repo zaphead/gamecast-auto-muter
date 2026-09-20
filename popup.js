@@ -28,7 +28,9 @@ async function refresh() {
   document.getElementById("cost").textContent = state.frames
     ? `$${Number(state.avgCost || 0).toFixed(6)}`
     : "—";
-  document.getElementById("costk").textContent = state.frames ? `avg/frame · ${state.frames}f` : "avg / frame";
+  document.getElementById("costk").textContent = state.frames
+    ? `avg/f · ${state.frames}f · ${state.ago < 0 ? "?" : state.ago + "s"}`
+    : "avg / frame";
   document.getElementById("mode").textContent = state.enabled ? state.mode || "live" : "—";
   document.getElementById("ver").textContent = `v${chrome.runtime.getManifest().version}`;
 }

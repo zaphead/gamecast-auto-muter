@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GameCast Auto-Muter",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Watches this tab, mutes full-screen ads, unmutes the game.",
   "permissions": ["tabs", "storage", "offscreen", "activeTab", "tabCapture"],
   "host_permissions": ["https://api.openai.com/*", "<all_urls>"],
