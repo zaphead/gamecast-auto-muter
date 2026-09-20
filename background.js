@@ -1,14 +1,18 @@
-const POLL_NOTE = "polling lives in offscreen.js";
 const DEFAULT_WIDTH = 512;
 const MODEL = "gpt-5-nano";
 const PRICE_IN_PER_M = 0.05;
 const PRICE_OUT_PER_M = 0.4;
+const VERIFY_COOLDOWN_MS = 5000;
+const HEARTBEAT_MS = 60000;
+const MUTE_AFTER_STREAK = 2;
 
 const SYSTEM_PROMPT = 'Binary classifier. Output ONLY valid JSON: {"is_game": true/false}. No other text. Look ONLY at the video player area. Ignore browser UI, tabs, and page around the player.';
 const USER_PROMPT =
   'Return JSON. Judge ONLY what is inside the video player (ignore browser chrome and surrounding page). ' +
   '{"is_game": true} = player shows actual sportscast: live play, field/court/rink, players/refs/ball, score bug. ' +
   '{"is_game": false} = player shows ad, commercial, promo, menu, loading, no game. Unsure = false.';
+
+const debounceTimers = {};
 
 async function ensureOffscreen() {
   try {
@@ -17,11 +21,21 @@ async function ensureOffscreen() {
     }
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
-      reasons: ["BLOBS"],
-      justification: "5s screenshot polling + image resize for game detection"
+      reasons: ["BLOBS", "USER_MEDIA"],
+      justification: "Tab video sampling, shot detection, and image resize for game detection"
     });
   } catch (e) {
     if (!String(e && e.message).includes("Only a single offscreen")) throw e;
+  }
+}
+
+async function sendToOffscreen(msg) {
+  await ensureOffscreen();
+  try {
+    return await chrome.runtime.sendMessage(msg);
+  } catch {
+    await new Promise((r) => setTimeout(r, 400));
+    return await chrome.runtime.sendMessage(msg);
   }
 }
 
@@ -30,13 +44,48 @@ async function getEnabledTabs() {
   return s.enabledTabs || {};
 }
 
+async function getLegacyTabs() {
+  const s = await chrome.storage.session.get("legacyTabs");
+  return s.legacyTabs || {};
+}
+
+async function markLegacy(tabId, on) {
+  const legacy = await getLegacyTabs();
+  if (on) legacy[String(tabId)] = true;
+  else delete legacy[String(tabId)];
+  await chrome.storage.session.set({ legacyTabs: legacy });
+}
+
 async function setEnabled(tabId, on) {
   const tabs = await getEnabledTabs();
   if (on) tabs[String(tabId)] = true;
   else delete tabs[String(tabId)];
   await chrome.storage.session.set({ enabledTabs: tabs });
-  if (on) await ensureOffscreen();
+  if (on) {
+    await ensureOffscreen();
+    await startStreamFor(tabId);
+  } else {
+    await stopStreamFor(tabId);
+  }
   await updateBadge(tabId, on);
+}
+
+async function startStreamFor(tabId) {
+  try {
+    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+    const { shotWidth } = await chrome.storage.local.get("shotWidth");
+    await sendToOffscreen({ type: "startStream", tabId, streamId, width: shotWidth || DEFAULT_WIDTH });
+    await markLegacy(tabId, false);
+  } catch {
+    await markLegacy(tabId, true);
+  }
+}
+
+async function stopStreamFor(tabId) {
+  try {
+    await sendToOffscreen({ type: "stopStream", tabId });
+  } catch {}
+  await markLegacy(tabId, false);
 }
 
 async function updateBadge(tabId, on) {
@@ -96,61 +145,115 @@ async function classify(dataUrl, apiKey) {
   return { isGame, cost };
 }
 
-async function checkTab(tabId) {
+async function applyVerdict(tabId, isGame, cost) {
+  const costKey = `costs_${tabId}`;
+  const prev = (await chrome.storage.session.get(costKey))[costKey] || [];
+  const costs = [...prev, cost].slice(-10);
+  const avgCost = costs.reduce((a, b) => a + b, 0) / costs.length;
+  let streak = 0;
+  if (!isGame) {
+    streak = ((await chrome.storage.session.get(`streak_${tabId}`))[`streak_${tabId}`] || 0) + 1;
+  }
+  await chrome.storage.session.set({
+    [`st_${tabId}`]: isGame ? "game" : "ad",
+    [`ts_${tabId}`]: Date.now(),
+    [`vv_${tabId}`]: Date.now(),
+    [costKey]: costs,
+    [`avg_${tabId}`]: avgCost,
+    [`streak_${tabId}`]: streak
+  });
+  await chrome.storage.session.remove([`err_${tabId}`]);
+  if (isGame) {
+    await chrome.tabs.update(tabId, { muted: false });
+  } else if (streak >= MUTE_AFTER_STREAK) {
+    await chrome.tabs.update(tabId, { muted: true });
+  }
+  await updateBadge(tabId, true);
+}
+
+async function getFrame(tabId, width) {
+  const legacy = await getLegacyTabs();
+  if (!legacy[String(tabId)]) {
+    try {
+      const r = await sendToOffscreen({ type: "frame", tabId, width });
+      if (r && r.dataUrl) return r.dataUrl;
+    } catch {}
+    await markLegacy(tabId, true);
+  }
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.active) throw new Error("Tab not visible for capture");
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 50 });
+  const resized = await sendToOffscreen({ type: "resize", dataUrl, width });
+  return resized.dataUrl || dataUrl;
+}
+
+async function verify(tabId, { force = false } = {}) {
   const tabs = await getEnabledTabs();
   if (!tabs[String(tabId)]) return;
+  const now = Date.now();
+  if (!force) {
+    const last = (await chrome.storage.session.get(`vv_${tabId}`))[`vv_${tabId}`] || 0;
+    if (now - last < VERIFY_COOLDOWN_MS) return;
+  }
   const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
-  const width = shotWidth || DEFAULT_WIDTH;
   if (!openaiKey) {
     await chrome.storage.session.set({ [`st_${tabId}`]: "nokey" });
     await updateBadge(tabId, true);
     return;
   }
-  let tab;
-  try {
-    tab = await chrome.tabs.get(tabId);
-  } catch {
-    await setEnabled(tabId, false);
-    return;
-  }
-  if (!tab.active) return;
   await chrome.storage.session.set({ [`st_${tabId}`]: "checking" });
+  const frame = await getFrame(tabId, shotWidth || DEFAULT_WIDTH);
+  const { isGame, cost } = await classify(frame, openaiKey);
+  await applyVerdict(tabId, isGame, cost);
+}
 
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
-    format: "jpeg",
-    quality: 50
-  });
-  const resized = await chrome.runtime.sendMessage({
-    type: "resize",
-    dataUrl,
-    width
-  });
-  const { isGame, cost } = await classify(resized.dataUrl || dataUrl, openaiKey);
-  const costKey = `costs_${tabId}`;
-  const prev = (await chrome.storage.session.get(costKey))[costKey] || [];
-  const costs = [...prev, cost].slice(-10);
-  const avgCost = costs.reduce((a, b) => a + b, 0) / costs.length;
-  await chrome.storage.session.set({
-    [`st_${tabId}`]: isGame ? "game" : "ad",
-    [`ts_${tabId}`]: Date.now(),
-    [costKey]: costs,
-    [`avg_${tabId}`]: avgCost
-  });
-  await chrome.storage.session.remove([`err_${tabId}`]);
-  await chrome.tabs.update(tabId, { muted: !isGame });
+function triggerVerify(tabId, delay = 700) {
+  if (debounceTimers[tabId]) return;
+  debounceTimers[tabId] = setTimeout(async () => {
+    delete debounceTimers[tabId];
+    try {
+      await verify(tabId);
+    } catch (e) {
+      await noteError(tabId, e);
+    }
+  }, delay);
+}
+
+async function noteError(tabId, e) {
+  const tabs = await getEnabledTabs();
+  if (!tabs[String(tabId)]) return;
+  await chrome.storage.session.set({ [`st_${tabId}`]: "error", [`err_${tabId}`]: String((e && e.message) || e) });
   await updateBadge(tabId, true);
 }
 
 async function tick() {
   const tabs = await getEnabledTabs();
+  const legacy = await getLegacyTabs();
   for (const id of Object.keys(tabs)) {
+    const tabId = Number(id);
     try {
-      await checkTab(Number(id));
+      if (legacy[String(tabId)]) {
+        await verify(tabId, { force: true });
+      } else {
+        const last = (await chrome.storage.session.get(`vv_${tabId}`))[`vv_${tabId}`] || 0;
+        if (Date.now() - last > HEARTBEAT_MS) await verify(tabId, { force: true });
+      }
     } catch (e) {
-      await chrome.storage.session.set({ [`st_${id}`]: "error", [`err_${id}`]: String((e && e.message) || e) });
-      await updateBadge(Number(id), true);
+      await noteError(tabId, e);
     }
   }
+}
+
+function clearTabState(tabId) {
+  return chrome.storage.session.remove([
+    `st_${tabId}`,
+    `ts_${tabId}`,
+    `err_${tabId}`,
+    `avg_${tabId}`,
+    `costs_${tabId}`,
+    `streak_${tabId}`,
+    `vv_${tabId}`
+  ]);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -158,19 +261,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "tick") {
       await tick();
       sendResponse({ ok: true });
+    } else if (msg.type === "shot") {
+      triggerVerify(msg.tabId, 400);
+      sendResponse({ ok: true });
+    } else if (msg.type === "vsignal") {
+      const tabId = sender.tab && sender.tab.id;
+      if (tabId) triggerVerify(tabId, msg.kind === "videoAdded" ? 400 : 900);
+      sendResponse({ ok: true });
+    } else if (msg.type === "streamError") {
+      await markLegacy(msg.tabId, true);
+      triggerVerify(msg.tabId, 500);
+      sendResponse({ ok: true });
     } else if (msg.type === "toggle") {
       await setEnabled(msg.tabId, msg.on);
       if (!msg.on) {
         try {
           await chrome.tabs.update(msg.tabId, { muted: false });
         } catch {}
-        await chrome.storage.session.remove([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`, `avg_${msg.tabId}`, `costs_${msg.tabId}`]);
+        await clearTabState(msg.tabId);
       }
       sendResponse({ ok: true });
     } else if (msg.type === "getState") {
       const tabs = await getEnabledTabs();
+      const legacy = await getLegacyTabs();
       const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
-      const st = await chrome.storage.session.get([`st_${msg.tabId}`, `ts_${msg.tabId}`, `err_${msg.tabId}`, `avg_${msg.tabId}`, `costs_${msg.tabId}`]);
+      const st = await chrome.storage.session.get([
+        `st_${msg.tabId}`,
+        `ts_${msg.tabId}`,
+        `err_${msg.tabId}`,
+        `avg_${msg.tabId}`,
+        `costs_${msg.tabId}`
+      ]);
       sendResponse({
         enabled: !!tabs[String(msg.tabId)],
         hasKey: !!openaiKey,
@@ -179,13 +300,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         error: st[`err_${msg.tabId}`] || "",
         width: shotWidth || DEFAULT_WIDTH,
         avgCost: st[`avg_${msg.tabId}`] || 0,
-        frames: (st[`costs_${msg.tabId}`] || []).length
+        frames: (st[`costs_${msg.tabId}`] || []).length,
+        mode: legacy[String(msg.tabId)] ? "poll" : "live"
       });
-    } else if (msg.type === "setWidth") {
-      await chrome.storage.local.set({ shotWidth: msg.width });
-      sendResponse({ ok: true });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });
+      sendResponse({ ok: true });
+    } else if (msg.type === "setWidth") {
+      await chrome.storage.local.set({ shotWidth: msg.width });
+      try {
+        await sendToOffscreen({ type: "setWidth", tabId: msg.tabId, width: msg.width });
+      } catch {}
       sendResponse({ ok: true });
     }
   })();
@@ -194,7 +319,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await setEnabled(tabId, false);
-  await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`, `err_${tabId}`, `avg_${tabId}`, `costs_${tabId}`]);
+  await clearTabState(tabId);
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
@@ -205,7 +330,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
       try {
         await chrome.tabs.update(tabId, { muted: false });
       } catch {}
-      await chrome.storage.session.remove([`st_${tabId}`, `ts_${tabId}`, `err_${tabId}`, `avg_${tabId}`, `costs_${tabId}`]);
+      await clearTabState(tabId);
     }
   }
 });

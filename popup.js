@@ -25,6 +25,7 @@ async function refresh() {
   document.getElementById("cost").textContent = state.frames
     ? `$${Number(state.avgCost || 0).toFixed(6)} (${state.frames} frames)`
     : "—";
+  document.getElementById("mode").textContent = state.enabled ? state.mode || "live" : "—";
   document.getElementById("ver").textContent = `v${chrome.runtime.getManifest().version}`;
   toggleEl.textContent = state.enabled ? "Turn OFF for this tab" : "Turn ON for this tab";
   toggleEl.onclick = async () => {
