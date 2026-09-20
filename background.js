@@ -44,7 +44,7 @@ const LABELS = {
 const busy = new Set();
 
 function defaultState() {
-  return { status: "off", lastCost: null, lastVerify: 0, emptyStreak: 0, error: "" };
+  return { status: "off", lastCost: null, sessionTotal: 0, lastVerify: 0, emptyStreak: 0, error: "" };
 }
 
 async function loadState(tabId) {
@@ -172,7 +172,13 @@ async function classify(dataUrl, apiKey) {
 }
 
 async function recordCost(tabId, cost) {
-  await saveState(tabId, { lastCost: cost, lastVerify: Date.now(), emptyStreak: 0 });
+  const cur = await loadState(tabId);
+  await saveState(tabId, {
+    lastCost: cost,
+    sessionTotal: cur.sessionTotal + cost,
+    lastVerify: Date.now(),
+    emptyStreak: 0
+  });
 }
 
 async function applyVerdict(tabId, isGame) {
@@ -287,7 +293,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         label: enabled ? LABELS[cur.status] || cur.status : LABELS.off,
         ago: cur.lastVerify ? Math.max(0, Math.round((Date.now() - cur.lastVerify) / 1000)) : -1,
         error: cur.error,
-        lastCost: cur.lastCost
+        lastCost: cur.lastCost,
+        sessionTotal: cur.sessionTotal
       });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });

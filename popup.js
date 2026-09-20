@@ -33,9 +33,10 @@ async function refreshInner() {
   document.getElementById("cost").textContent =
     state.lastCost === null || state.lastCost === undefined
       ? "—"
-      : `$${Number(state.lastCost).toFixed(2)}`;
+      : `${(Number(state.lastCost) * 100).toFixed(4)}¢`;
+  const agoTxt = state.ago < 0 ? "?" : `${state.ago}s`;
   document.getElementById("costk").textContent =
-    state.ago < 0 ? "last check" : `last check · ${state.ago}s ago`;
+    `total ${((Number(state.sessionTotal) || 0) * 100).toFixed(2)}¢ · ${agoTxt} ago`;
   const mine = chrome.runtime.getManifest().version;
   document.getElementById("ver").textContent = `v${mine}`;
   if (!state.code || state.code !== mine) {
