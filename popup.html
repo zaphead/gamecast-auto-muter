@@ -25,7 +25,6 @@
     text-shadow: 0 -1px 0 rgba(0,0,0,0.9);
     margin: 12px 2px 6px;
   }
-  .label:first-child { margin-top: 0; }
   .well {
     background: #0a0b0d;
     border-radius: 9px;
@@ -34,48 +33,8 @@
       inset 0 -1px 0 rgba(255,255,255,0.05);
     padding: 10px 12px;
   }
-  .statusrow { display: flex; align-items: center; gap: 10px; }
-  .led {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: #3a3d43;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.06);
-    transition-property: background-color, box-shadow;
-    transition-duration: 0.25s;
-    flex: none;
-  }
-  .led.game { background: #4ade80; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
-  .led.ad { background: #ef4444; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
-  .led.checking, .led.nokey, .led.error { background: #f59e0b; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
-  #status { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
-  #err { font-size: 10px; color: #f87171; margin-top: 6px; display: none; }
-  #err.show { display: block; }
-  .keyrow { display: flex; gap: 8px; }
-  #key {
-    flex: 1; min-width: 0;
-    background: #0a0b0d; color: #c9ccd3;
-    border: 0; border-radius: 9px;
-    font-family: ui-monospace, monospace;
-    padding: 10px 12px; outline: none;
-    box-shadow:
-      inset 0 2px 6px rgba(0,0,0,0.85),
-      inset 0 -1px 0 rgba(255,255,255,0.05);
-  }
-  #key::placeholder { color: #4c5058; }
-  .btn {
-    border: 0; cursor: pointer; color: #dfe2e8;
-    font-weight: 600; letter-spacing: 0.03em;
-    padding: 0 14px; min-height: 40px; border-radius: 9px;
-    background: linear-gradient(#2e3238, #22252a);
-    box-shadow:
-      0 2px 0 #0a0b0d,
-      0 5px 12px rgba(0,0,0,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.14);
-    transition-property: transform, box-shadow;
-    transition-duration: 0.12s;
-  }
-  .btn:active { transform: translateY(2px) scale(0.99); box-shadow: 0 0 0 #0a0b0d, 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
-  .powerrow { display: flex; align-items: center; justify-content: space-between; padding: 2px; }
-  .powerlabel { font-weight: 600; color: #aab0ba; text-shadow: 0 -1px 0 rgba(0,0,0,0.9); }
+  .toprow { display: flex; align-items: center; gap: 10px; }
+  .powerlabel { font-weight: 600; color: #aab0ba; text-shadow: 0 -1px 0 rgba(0,0,0,0.9); flex: 1; }
   .switch { position: relative; width: 64px; height: 40px; flex: none; }
   .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
   .track {
@@ -111,41 +70,65 @@
   }
   .switch input:checked ~ .knob { transform: translateX(32px); }
   .switch input:focus-visible ~ .track { outline: 2px solid #aab0ba; outline-offset: 2px; }
-  .sliderhead { display: flex; justify-content: space-between; align-items: baseline; }
-  #widthval { font-variant-numeric: tabular-nums; color: #dfe2e8; font-weight: 700; }
-  input[type="range"] {
-    -webkit-appearance: none; appearance: none;
-    width: 100%; height: 40px; margin: 0;
-    background: transparent; cursor: pointer;
-  }
-  input[type="range"]::-webkit-slider-runnable-track {
-    height: 8px; border-radius: 4px;
-    background: linear-gradient(#08090b, #101114);
+  .iconbtn {
+    flex: none;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 9px; cursor: pointer;
+    background: linear-gradient(#2e3238, #22252a);
     box-shadow:
-      inset 0 2px 4px rgba(0,0,0,0.9),
-      0 1px 0 rgba(255,255,255,0.07);
+      0 2px 0 #0a0b0d,
+      0 5px 12px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+    transition-property: transform, box-shadow;
+    transition-duration: 0.12s;
   }
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 24px; height: 24px; margin-top: -8px; border-radius: 50%;
-    background:
-      repeating-linear-gradient(90deg, rgba(0,0,0,0.25) 0 2px, transparent 2px 5px),
-      radial-gradient(circle at 35% 30%, #565b64, #2b2e34 70%);
+  .iconbtn:active { transform: translateY(2px) scale(0.99); box-shadow: 0 0 0 #0a0b0d, 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
+  .iconbtn svg { width: 18px; height: 18px; fill: #aab0ba; }
+  .iconbtn.open svg { fill: #dfe2e8; }
+  .statuswrap { margin-top: 12px; }
+  .statusrow { display: flex; align-items: center; gap: 10px; }
+  .led {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #3a3d43;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.06);
+    transition-property: background-color, box-shadow;
+    transition-duration: 0.25s;
+    flex: none;
+  }
+  .led.game { background: #4ade80; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
+  .led.ad { background: #ef4444; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
+  .led.checking, .led.nokey, .led.error { background: #f59e0b; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6); }
+  #status { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+  #err { font-size: 10px; color: #f87171; margin-top: 6px; display: none; }
+  #err.show { display: block; }
+  .keypop { margin-top: 12px; }
+  .keypop[hidden] { display: none; }
+  .keyrow { display: flex; gap: 8px; }
+  #key {
+    flex: 1; min-width: 0;
+    background: #0a0b0d; color: #c9ccd3;
+    border: 0; border-radius: 9px;
+    font-family: ui-monospace, monospace;
+    padding: 10px 12px; outline: none;
     box-shadow:
-      0 3px 7px rgba(0,0,0,0.7),
-      inset 0 1px 0 rgba(255,255,255,0.3);
+      inset 0 2px 6px rgba(0,0,0,0.85),
+      inset 0 -1px 0 rgba(255,255,255,0.05);
   }
-  input[type="range"]::-moz-range-track {
-    height: 8px; border-radius: 4px;
-    background: #0c0d0f;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9);
+  #key::placeholder { color: #4c5058; }
+  .btn {
+    border: 0; cursor: pointer; color: #dfe2e8;
+    font-weight: 600; letter-spacing: 0.03em;
+    padding: 0 14px; min-height: 40px; border-radius: 9px;
+    background: linear-gradient(#2e3238, #22252a);
+    box-shadow:
+      0 2px 0 #0a0b0d,
+      0 5px 12px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+    transition-property: transform, box-shadow;
+    transition-duration: 0.12s;
   }
-  input[type="range"]::-moz-range-thumb {
-    width: 22px; height: 22px; border: 0; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #565b64, #2b2e34 70%);
-    box-shadow: 0 3px 7px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.3);
-  }
-  .ticks { display: flex; justify-content: space-between; font-size: 10px; color: #565b64; padding: 0 2px; font-variant-numeric: tabular-nums; }
+  .btn:active { transform: translateY(2px) scale(0.99); box-shadow: 0 0 0 #0a0b0d, 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
   .metergrid { display: flex; gap: 8px; }
   .meter { flex: 1; min-width: 0; overflow: hidden; }
   .meter .v { font-size: 20px; font-weight: 700; color: #dfe2e8; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -155,33 +138,29 @@
 </style>
 </head>
 <body>
-  <div class="label">Status</div>
-  <div class="well">
-    <div class="statusrow"><span class="led" id="led"></span><span id="status">…</span></div>
-    <div id="err"></div>
+  <div class="well toprow">
+    <span class="powerlabel" id="powerlabel">Off</span>
+    <button class="iconbtn" id="gear" aria-label="API key settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L14.9 3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.4 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6ZM12.9 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>
+    </button>
+    <span class="switch">
+      <input type="checkbox" id="toggle" aria-label="Toggle watcher for this tab">
+      <span class="track"></span>
+      <span class="knob"></span>
+    </span>
   </div>
 
-  <div class="label">OpenAI key</div>
-  <div class="keyrow">
-    <input id="key" type="password" placeholder="sk-..." spellcheck="false">
-    <button class="btn" id="save">Save</button>
-  </div>
-
-  <div class="label">Watcher</div>
-  <div class="well">
-    <div class="powerrow">
-      <span class="powerlabel" id="powerlabel">Off</span>
-      <span class="switch">
-        <input type="checkbox" id="toggle" aria-label="Toggle watcher for this tab">
-        <span class="track"></span>
-        <span class="knob"></span>
-      </span>
+  <div class="well keypop" id="keypop" hidden>
+    <div class="keyrow">
+      <input id="key" type="password" placeholder="sk-..." spellcheck="false">
+      <button class="btn" id="save">Save</button>
     </div>
   </div>
 
-  <div class="label sliderhead"><span>Capture width</span><span id="widthval">512px</span></div>
-  <input id="width" type="range" min="256" max="1024" step="64" value="512" aria-label="Capture width">
-  <div class="ticks"><span>256</span><span>1024</span></div>
+  <div class="well statuswrap">
+    <div class="statusrow"><span class="led" id="led"></span><span id="status">…</span></div>
+    <div id="err"></div>
+  </div>
 
   <div class="label">Telemetry</div>
   <div class="metergrid">

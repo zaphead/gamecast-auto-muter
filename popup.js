@@ -15,8 +15,7 @@ async function refresh() {
     nokey: "No key",
     error: "Error"
   };
-  const statusEl = document.getElementById("status");
-  statusEl.textContent = state.enabled ? labels[state.status] || state.status : "Off";
+  document.getElementById("status").textContent = state.enabled ? labels[state.status] || state.status : "Off";
   const led = document.getElementById("led");
   led.className = "led" + (state.enabled ? ` ${state.status}` : "");
   const errEl = document.getElementById("err");
@@ -26,9 +25,6 @@ async function refresh() {
   const toggle = document.getElementById("toggle");
   if (document.activeElement !== toggle) toggle.checked = !!state.enabled;
   document.getElementById("powerlabel").textContent = state.enabled ? "On — this tab" : "Off";
-  const slider = document.getElementById("width");
-  if (document.activeElement !== slider) slider.value = state.width ?? 512;
-  document.getElementById("widthval").textContent = `${state.width ?? 512}px`;
   document.getElementById("cost").textContent = state.frames
     ? `$${Number(state.avgCost || 0).toFixed(6)}`
     : "—";
@@ -44,19 +40,24 @@ document.getElementById("toggle").onchange = async (e) => {
   refresh();
 };
 
+const gear = document.getElementById("gear");
+const keypop = document.getElementById("keypop");
+gear.onclick = () => {
+  const open = keypop.hidden;
+  keypop.hidden = !open;
+  gear.classList.toggle("open", open);
+  gear.setAttribute("aria-expanded", String(open));
+  if (open) document.getElementById("key").focus();
+};
+
 document.getElementById("save").onclick = async () => {
   const key = document.getElementById("key").value.trim();
   if (!key) return;
   await chrome.runtime.sendMessage({ type: "setKey", key });
   document.getElementById("key").value = "";
-  refresh();
-};
-
-document.getElementById("width").oninput = (e) => {
-  document.getElementById("widthval").textContent = `${e.target.value}px`;
-};
-document.getElementById("width").onchange = async (e) => {
-  await chrome.runtime.sendMessage({ type: "setWidth", width: Number(e.target.value) });
+  keypop.hidden = true;
+  gear.classList.remove("open");
+  gear.setAttribute("aria-expanded", "false");
   refresh();
 };
 

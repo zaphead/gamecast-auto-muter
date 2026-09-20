@@ -73,8 +73,7 @@ async function setEnabled(tabId, on) {
 async function startStreamFor(tabId) {
   try {
     const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
-    const { shotWidth } = await chrome.storage.local.get("shotWidth");
-    await sendToOffscreen({ type: "startStream", tabId, streamId, width: shotWidth || DEFAULT_WIDTH });
+    await sendToOffscreen({ type: "startStream", tabId, streamId, width: DEFAULT_WIDTH });
     await markLegacy(tabId, false);
   } catch {
     await markLegacy(tabId, true);
@@ -195,14 +194,14 @@ async function verify(tabId, { force = false } = {}) {
     const last = (await chrome.storage.session.get(`vv_${tabId}`))[`vv_${tabId}`] || 0;
     if (now - last < VERIFY_COOLDOWN_MS) return;
   }
-  const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
+  const { openaiKey } = await chrome.storage.local.get("openaiKey");
   if (!openaiKey) {
     await chrome.storage.session.set({ [`st_${tabId}`]: "nokey" });
     await updateBadge(tabId, true);
     return;
   }
   await chrome.storage.session.set({ [`st_${tabId}`]: "checking" });
-  const frame = await getFrame(tabId, shotWidth || DEFAULT_WIDTH);
+  const frame = await getFrame(tabId, DEFAULT_WIDTH);
   const { isGame, cost } = await classify(frame, openaiKey);
   await applyVerdict(tabId, isGame, cost);
 }
@@ -284,7 +283,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.type === "getState") {
       const tabs = await getEnabledTabs();
       const legacy = await getLegacyTabs();
-      const { openaiKey, shotWidth } = await chrome.storage.local.get(["openaiKey", "shotWidth"]);
+      const { openaiKey } = await chrome.storage.local.get("openaiKey");
       const st = await chrome.storage.session.get([
         `st_${msg.tabId}`,
         `ts_${msg.tabId}`,
@@ -298,19 +297,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         status: st[`st_${msg.tabId}`] || "off",
         ts: st[`ts_${msg.tabId}`] || 0,
         error: st[`err_${msg.tabId}`] || "",
-        width: shotWidth || DEFAULT_WIDTH,
         avgCost: st[`avg_${msg.tabId}`] || 0,
         frames: (st[`costs_${msg.tabId}`] || []).length,
         mode: legacy[String(msg.tabId)] ? "poll" : "live"
       });
     } else if (msg.type === "setKey") {
       await chrome.storage.local.set({ openaiKey: msg.key });
-      sendResponse({ ok: true });
-    } else if (msg.type === "setWidth") {
-      await chrome.storage.local.set({ shotWidth: msg.width });
-      try {
-        await sendToOffscreen({ type: "setWidth", tabId: msg.tabId, width: msg.width });
-      } catch {}
       sendResponse({ ok: true });
     }
   })();

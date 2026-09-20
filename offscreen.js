@@ -97,10 +97,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.type === "stopStream") {
       stopStream(msg.tabId);
       sendResponse({ ok: true });
-    } else if (msg.type === "setWidth") {
-      const st = streams.get(String(msg.tabId));
-      if (st) st.width = msg.width;
-      sendResponse({ ok: true });
     } else if (msg.type === "frame") {
       const st = streams.get(String(msg.tabId));
       if (st && st.video.videoWidth) {
